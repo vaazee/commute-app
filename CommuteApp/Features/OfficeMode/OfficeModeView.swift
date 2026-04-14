@@ -12,6 +12,7 @@ struct OfficeModeView: View {
             bikeSection
             busSection
             pathSection
+            ReferencesSection()
         }
     }
 

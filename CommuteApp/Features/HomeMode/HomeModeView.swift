@@ -12,6 +12,7 @@ struct HomeModeView: View {
             busSection
             bikeSection
             pathSection
+            ReferencesSection()
         }
     }
 
