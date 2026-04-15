@@ -14,9 +14,10 @@ A personal iOS app that makes the daily commute legible at a glance. Two anchore
 6. [Project layout](#project-layout)
 7. [Build & run](#build--run)
 8. [GTFS preprocessor](#gtfs-preprocessor)
-9. [Testing](#testing)
-10. [Known limitations](#known-limitations)
-11. [References](#references)
+9. [App icon](#app-icon)
+10. [Testing](#testing)
+11. [Known limitations](#known-limitations)
+12. [References](#references)
 
 ---
 
@@ -189,9 +190,12 @@ commute-app/
 │   │   └── PathService.swift
 │   ├── Resources/
 │   │   └── njtransit_gtfs.sqlite  # ~0.7 MB, built by the preprocessor below
+│   ├── Assets.xcassets/
+│   │   └── AppIcon.appiconset/    # 1024x1024 app icon, regenerable via scripts/make_app_icon.py
 │   └── Info.plist
 ├── scripts/
-│   └── build_gtfs_db.py          # One-time NJ Transit GTFS → SQLite preprocessor
+│   ├── build_gtfs_db.py          # One-time NJ Transit GTFS → SQLite preprocessor
+│   └── make_app_icon.py          # Regenerates Assets.xcassets/AppIcon.appiconset/icon-1024.png
 ├── .gitignore
 └── README.md
 ```
@@ -278,6 +282,20 @@ CREATE TABLE calendar_dates (service_id, date, exception_type);
 ```
 
 Times are stored in GTFS format (`HH:MM:SS`, where hours may exceed 24 for after-midnight service). `NJTransitScheduleService.parseGtfsTime` handles this by adding the raw seconds to `Calendar.startOfDay(for: now)`.
+
+---
+
+## App icon
+
+`scripts/make_app_icon.py` regenerates the 1024×1024 app icon at `CommuteApp/Assets.xcassets/AppIcon.appiconset/icon-1024.png`. Run it with Pillow installed:
+
+```bash
+python3 scripts/make_app_icon.py
+```
+
+The current design is a white bus-front silhouette on a diagonal gradient from PATH blue (`#003DA5`) to NJ Transit orange (`#F58025`) — a nod to the two transit systems the app serves. The output is flat RGB (no alpha) so iOS accepts it as an app icon. The asset catalog uses a single universal 1024×1024 slot; Xcode generates all device sizes from it at build time.
+
+The target's build settings include `ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon` so `actool` knows which asset set to treat as the app icon. Without it, the icon won't be packed into the `.app` bundle.
 
 ---
 
