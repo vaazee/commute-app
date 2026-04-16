@@ -5,11 +5,13 @@ struct HomeModeView: View {
     let bikes: CitiBikeService
     let path: PathService
     let bus: NJTransitScheduleService
+    let subway: MTASubwayService
     let here: CLLocationCoordinate2D?
 
     var body: some View {
         VStack(spacing: 12) {
             busSection
+            subwaySection
             bikeSection
             pathSection
             ReferencesSection()
@@ -52,6 +54,23 @@ struct HomeModeView: View {
                     .foregroundStyle(.secondary)
             } else {
                 EmptyRow(text: "No nearby 126 stop")
+            }
+        }
+    }
+
+    private var subwaySection: some View {
+        SectionCard(title: "E uptown @ Port Auth", systemImage: "tram.tunnel.fill") {
+            let trains = subway.upcoming(
+                stopId: MTAStops.portAuthorityACEUptown,
+                routes: ["E"],
+                within: 30
+            )
+            if trains.isEmpty {
+                EmptyRow(text: "No trains in next 30 min")
+            } else {
+                ForEach(trains.prefix(6)) { t in
+                    DepartureRow(primary: "E — uptown", secondary: nil, minutes: t.minutesAway, date: t.arrival)
+                }
             }
         }
     }

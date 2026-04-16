@@ -30,16 +30,18 @@ The app opens to whichever mode GPS suggests. The top bar shows the current mode
 Ordered top to bottom — the first section is what you'd check first when leaving the house.
 
 1. **126 Bus → NYC.** Nearest 126 bus stop to 610 Clinton St that is served by the **Willow Ave or Clinton St NYC-bound variants** (the Washington St variant is excluded by the headsign filter). Lists the next ~5 scheduled departures within 20 minutes with minutes-away and absolute departure time.
-2. **Citi Bike near home.** Three nearest rentable stations to 610 Clinton St, with name, walking distance, bikes available (including e-bikes), and docks available.
-3. **Hoboken PATH.** Open Citi Bike docks at the station *named* "Hoboken Terminal" (so you can confirm there's room to drop the bike before boarding), followed by the next PATH trains from Hoboken → 33rd St within 30 minutes.
-4. **References.** Links to official schedules (see below).
+2. **E uptown @ Port Auth.** Next real-time **E train** arrivals at 42 St-Port Authority (stop `A27N`) within 30 minutes, from the MTA GTFS-realtime ACE feed. Covers the "got off the 126 at Port Authority, catch the E uptown to the office" leg.
+3. **Citi Bike near home.** Three nearest rentable stations to 610 Clinton St, with name, walking distance, bikes available (including e-bikes), and docks available.
+4. **Hoboken PATH.** Open Citi Bike docks at the station *named* "Hoboken Terminal" (so you can confirm there's room to drop the bike before boarding), followed by the next PATH trains from Hoboken → 33rd St within 30 minutes.
+5. **References.** Links to official schedules (see below).
 
 ### Office mode
 
-1. **Citi Bike near office.** Three nearest rentable stations to 919 3rd Ave.
-2. **126 Bus from Port Authority.** Next ~6 scheduled departures from the Port Authority Bus Terminal departure stop (stop_id `3511`) within 30 minutes, filtered to headsigns containing `WILLOW` or `CLINTON`.
-3. **PATH 23rd St → Hoboken.** Next trains from 23rd St → Hoboken within 30 minutes.
-4. **References.**
+1. **E / M downtown.** Merged real-time list of **E trains** at Lexington Av/53 St (stop `F11S`) and **M trains** at Lexington Av/63 St (stop `B08S`), each within 30 minutes, sorted by arrival. The M currently runs via the 63rd St tunnel rather than the 53rd, so it doesn't stop at Lex/53 — the two rows show the station name for disambiguation. Data from MTA GTFS-realtime ACE + BDFM feeds.
+2. **Citi Bike near office.** Three nearest rentable stations to 919 3rd Ave.
+3. **126 Bus from Port Authority.** Next ~6 scheduled departures from the Port Authority Bus Terminal departure stop (stop_id `3511`) within 30 minutes, filtered to headsigns containing `WILLOW` or `CLINTON`.
+4. **PATH 23rd St → Hoboken.** Next trains from 23rd St → Hoboken within 30 minutes.
+5. **References.**
 
 ### References section (both modes)
 
@@ -70,17 +72,19 @@ All locked in early and unchanged since:
 │  ┌──────────┐   ┌──────────────────────────────────────────┐     │
 │  │ ModeBar  │   │ HomeModeView  /  OfficeModeView          │     │
 │  │ (picker) │   │   ├── BusSection     (SectionCard)       │     │
-│  └──────────┘   │   ├── BikeSection    (SectionCard)       │     │
+│  └──────────┘   │   ├── SubwaySection  (SectionCard)       │     │
+│                 │   ├── BikeSection    (SectionCard)       │     │
 │                 │   ├── PathSection    (SectionCard)       │     │
 │                 │   └── ReferencesSection (SectionCard)    │     │
 │                 └──────────────────────────────────────────┘     │
 │                                 │                                │
 │                                 ▼                                │
-│        ┌──────────────┬──────────────┬──────────────┐            │
-│        │ CitiBike     │ PathService  │ NJTransit    │            │
-│        │ Service      │              │ Schedule     │            │
-│        │ (GBFS JSON)  │ (RidePATH)   │ (bundled DB) │            │
-│        └──────────────┴──────────────┴──────────────┘            │
+│     ┌──────────┬──────────┬──────────┬──────────┐                │
+│     │ CitiBike │ Path     │ MTA      │ NJTransit│                │
+│     │ Service  │ Service  │ Subway   │ Schedule │                │
+│     │ (GBFS)   │ (RidePath│ (GTFS-RT │ (bundled │                │
+│     │          │  JSON)   │  protobuf│   DB)    │                │
+│     └──────────┴──────────┴──────────┴──────────┘                │
 │                                 ▲                                │
 │            ┌────────────────────┼──────────────┐                 │
 │            │   LocationService ─▶ ModeManager  │                 │
@@ -104,8 +108,10 @@ All locked in early and unchanged since:
 | Citi Bike GBFS — info | `https://gbfs.citibikenyc.com/gbfs/en/station_information.json` | None | JSON | Station name, lat/lon, capacity |
 | Citi Bike GBFS — status | `https://gbfs.citibikenyc.com/gbfs/en/station_status.json` | None | JSON | Bikes/docks/rentable flags |
 | PATH RidePATH | `https://www.panynj.gov/bin/portauthority/ridepath.json` | None | JSON | Per-station next-train predictions by destination |
+| MTA GTFS-realtime (ACE) | `https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-ace` | None | Protobuf | E train real-time trip updates |
+| MTA GTFS-realtime (BDFM) | `https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-bdfm` | None | Protobuf | M train real-time trip updates |
 
-All feeds are public and require no API key. Citi Bike's GBFS has included Hoboken stations since the Lyft acquisition, so a single feed covers both modes.
+All feeds are public and require no API key. Citi Bike's GBFS has included Hoboken stations since the Lyft acquisition, so a single feed covers both modes. The MTA feeds are GTFS-realtime protobuf; the app decodes them with a minimal hand-rolled parser (no SwiftProtobuf dep) — see `MTASubwayService`.
 
 ---
 
@@ -124,6 +130,7 @@ All feeds are public and require no API key. Citi Bike's GBFS has included Hobok
 - `BikeStation.swift` — value type with a `distance(from:)` helper using `CLLocation.distance(from:)`.
 - `BusDeparture.swift` — bus departure struct plus `NJTransitStops.portAuthorityDeparture = "3511"`.
 - `PathTrain.swift` — PATH train struct plus station-ID constants (`HOB`, `23S`, `33S`).
+- `SubwayTrain.swift` — MTA subway train struct plus the `MTAStops` enum of stop IDs we care about (`A27N` = Port Auth uptown, `F11S` = Lex/53 downtown, `B08S` = Lex/63 downtown) and a `stationName` lookup table for display.
 
 ### `CommuteApp/Services/CitiBikeService.swift`
 - Fetches `station_information.json` with a 1-hour in-memory cache (station metadata doesn't change often), and `station_status.json` on every refresh.
@@ -134,6 +141,13 @@ All feeds are public and require no API key. Citi Bike's GBFS has included Hobok
 - Decodes RidePATH JSON into `[stationCode: [PathTrain]]`.
 - `departures(from:to:within:)` filters by origin, destination, and a time window (accepts trains up to 60 seconds in the past, to avoid "just missed it" flicker).
 - Each train's `departure` is synthesized at parse time from `Date().addingTimeInterval(secondsToArrival)`.
+
+### `CommuteApp/Services/MTASubwayService.swift`
+- Fetches two MTA GTFS-realtime protobuf feeds in parallel (`gtfs-ace`, `gtfs-bdfm`) via `URLSession.shared.data(from:)`.
+- Decodes them with a private `GTFSRealtimeParser` enum that walks the protobuf wire format directly — reads the few fields we need (`entity`, `trip_update`, `trip.route_id`, `stop_time_update.stop_id`, `stop_time_update.{arrival,departure}.time`) and skips everything else by wire type. No SwiftProtobuf dependency, no generated code.
+- `refresh()` keeps only trips on `route_id = "E"` from the ACE feed and `route_id = "M"` from the BDFM feed, then materializes `SubwayTrain` rows with `stationName` resolved from `MTAStops.stationName`.
+- `upcoming(stopId:routes:within:)` filters the in-memory list to a single stop + a time window, tolerating trains up to 60 seconds in the past (same "just missed it" fudge as PATH).
+- The `%2F` in the feed URLs is preserved because we build them with `URL(string:)`. If you ever refactor through `URLComponents`, make sure it doesn't decode back to `/` — the MTA endpoint returns HTTP 403 for the decoded form.
 
 ### `CommuteApp/Services/NJTransitScheduleService.swift`
 - Opens the bundled `njtransit_gtfs.sqlite` read-only via the SQLite3 C API. No third-party Swift SQLite wrappers — just `import SQLite3` and the raw calls.
@@ -151,10 +165,12 @@ All feeds are public and require no API key. Citi Bike's GBFS has included Hobok
 ### `CommuteApp/Features/HomeMode/HomeModeView.swift`
 - `origin = Anchors.home`
 - Bus filter: `["NEW YORK VIA CLINTON", "NEW YORK VIA WILLOW"]`. This both picks the nearest stop *served by* those variants and filters departures at that stop to those variants.
+- Subway section queries `MTAStops.portAuthorityACEUptown` (`A27N`) for E trains uptown from Port Authority.
 
 ### `CommuteApp/Features/OfficeMode/OfficeModeView.swift`
 - `origin = Anchors.office`
 - Bus stop is hardcoded to `NJTransitStops.portAuthorityDeparture` (`3511`). Filter is `["WILLOW", "CLINTON"]` (broader — any Willow or Clinton variant, inbound or outbound relative to NYC).
+- Subway section queries two stops separately: `F11S` (Lex/53) filtered to `E` and `B08S` (Lex/63) filtered to `M`, then merges and sorts by arrival. If MTA ever restores the M to the 53rd St tunnel, collapse this by pointing `MTAStops.lexAv63Downtown` back to `"F11S"`.
 
 ---
 
@@ -186,6 +202,7 @@ commute-app/
 │   │       └── SectionCard.swift
 │   ├── Services/
 │   │   ├── CitiBikeService.swift
+│   │   ├── MTASubwayService.swift
 │   │   ├── NJTransitScheduleService.swift
 │   │   └── PathService.swift
 │   ├── Resources/
@@ -319,6 +336,7 @@ There is no automated test suite yet. The app is verified by:
 - **SourceKit noise.** Synchronized folder groups confuse Xcode's in-editor indexer. The command-line build is authoritative.
 - **No background refresh / notifications.** The 30-second refresh only runs while the app is foregrounded.
 - **"Hoboken Terminal" lookup is substring-based.** If Lyft renames the Citi Bike station at Hoboken Terminal, the `station(named: "Hoboken Terminal")` call will silently return nil. Stable enough for now; revisit if it breaks.
+- **M train at Lex/63 is tied to current MTA routing.** The M runs via the 63rd St tunnel, so in office mode we query `B08S` (Lex/63) instead of `F11S` (Lex/53) for the M. If MTA routes the M back through the 53rd St tunnel, `MTAStops.lexAv63Downtown` becomes wrong and the office-mode section will silently drop M trains. Fix: point that constant back to `"F11S"`.
 - **No accessibility pass, no Dynamic Type tuning, no dark-mode polish** beyond SwiftUI defaults.
 - **Single user, hardcoded anchors.** Not designed to be generalized.
 

@@ -5,10 +5,12 @@ struct OfficeModeView: View {
     let bikes: CitiBikeService
     let path: PathService
     let bus: NJTransitScheduleService
+    let subway: MTASubwayService
     let here: CLLocationCoordinate2D?
 
     var body: some View {
         VStack(spacing: 12) {
+            subwaySection
             bikeSection
             busSection
             pathSection
@@ -18,6 +20,34 @@ struct OfficeModeView: View {
 
     private var origin: CLLocationCoordinate2D {
         Anchors.office
+    }
+
+    private var subwaySection: some View {
+        SectionCard(title: "E / M downtown", systemImage: "tram.tunnel.fill") {
+            let eTrains = subway.upcoming(
+                stopId: MTAStops.lexAv53Downtown,
+                routes: ["E"],
+                within: 30
+            )
+            let mTrains = subway.upcoming(
+                stopId: MTAStops.lexAv63Downtown,
+                routes: ["M"],
+                within: 30
+            )
+            let merged = (eTrains + mTrains).sorted { $0.arrival < $1.arrival }
+            if merged.isEmpty {
+                EmptyRow(text: "No trains in next 30 min")
+            } else {
+                ForEach(merged.prefix(6)) { t in
+                    DepartureRow(
+                        primary: "\(t.routeId) — downtown",
+                        secondary: t.stationName,
+                        minutes: t.minutesAway,
+                        date: t.arrival
+                    )
+                }
+            }
+        }
     }
 
     private var bikeSection: some View {

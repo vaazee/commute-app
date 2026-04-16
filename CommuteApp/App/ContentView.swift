@@ -7,6 +7,7 @@ struct ContentView: View {
     @State private var bikes = CitiBikeService.shared
     @State private var path = PathService.shared
     @State private var bus = NJTransitScheduleService.shared
+    @State private var subway = MTASubwayService.shared
 
     @State private var refreshTimer: Timer?
 
@@ -17,9 +18,9 @@ struct ContentView: View {
                 ScrollView {
                     Group {
                         if mode.current == .home {
-                            HomeModeView(bikes: bikes, path: path, bus: bus, here: location.current)
+                            HomeModeView(bikes: bikes, path: path, bus: bus, subway: subway, here: location.current)
                         } else {
-                            OfficeModeView(bikes: bikes, path: path, bus: bus, here: location.current)
+                            OfficeModeView(bikes: bikes, path: path, bus: bus, subway: subway, here: location.current)
                         }
                     }
                     .padding()
@@ -63,7 +64,8 @@ struct ContentView: View {
     private func refreshAll() async {
         async let b: () = bikes.refresh()
         async let p: () = path.refresh()
-        _ = await (b, p)
+        async let s: () = subway.refresh()
+        _ = await (b, p, s)
     }
 
     private func startTimer() {

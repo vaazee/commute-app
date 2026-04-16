@@ -70,7 +70,21 @@ Both strings are needed — they select NYC-bound trips *and* exclude the Washin
 
 ## PATH — use RidePATH, not GTFS-RT
 
-The protobuf feed at `path.transitdata.nyc` only emits a single `stop_time_update` per trip (the *next* stop), not full trip predictions, so it can't answer "when does this Hoboken train reach 33rd St?". We use `https://www.panynj.gov/bin/portauthority/ridepath.json` instead — per-station, per-destination next-train predictions with `secondsToArrival`. Don't re-add SwiftProtobuf.
+The protobuf feed at `path.transitdata.nyc` only emits a single `stop_time_update` per trip (the *next* stop), not full trip predictions, so it can't answer "when does this Hoboken train reach 33rd St?". We use `https://www.panynj.gov/bin/portauthority/ridepath.json` instead — per-station, per-destination next-train predictions with `secondsToArrival`. Don't re-add SwiftProtobuf **for PATH** — the subway code path below is a separate decision.
+
+## MTA subway specifics (hard-won)
+
+- **Feeds**, no auth:
+  - ACE (covers E): `https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-ace`
+  - BDFM (covers M): `https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-bdfm`
+  - The encoded `%2F` in the path is load-bearing — if anything decodes it to a real `/` you get HTTP 403. Build URLs with `URL(string:)` (preserves the escape); don't round-trip through `URLComponents.path`.
+- **Hand-rolled protobuf decoder** lives in `MTASubwayService.swift` as `GTFSRealtimeParser`. It reads ~5 fields from `FeedMessage → FeedEntity → TripUpdate → StopTimeUpdate` and skips the rest via wire-type tags. This is deliberate — SwiftProtobuf for *one* feed adds a transitive dep and codegen step for maybe 80 lines of decode logic. If you need more fields (e.g. NYCT trip descriptor, alert text), extend the parser rather than reaching for SwiftProtobuf.
+- **Stop IDs** encode both line *and* direction:
+  - Letter prefix = line (`A` = 8 Av, `F` = 6 Av / Queens Blvd 53 St, `B` = 63 St tunnel/2 Av, `G` = Queens Blvd etc.).
+  - `N` / `S` suffix = direction (`N` = northbound/uptown in MTA's rubric, `S` = southbound/downtown). The suffix only appears in the realtime feed, not in the stop row itself.
+  - Current constants (`MTAStops` in `SubwayTrain.swift`): `A27N` = 42 St-Port Authority uptown (E→Jamaica), `F11S` = Lex/53 downtown (E→WTC), `B08S` = Lex/63 downtown (M→Essex/Middle Village).
+- **The M train uses the 63rd St tunnel, not 53rd.** This is the thing that will bite you. At Lex/53 (`F11`) only the **E** stops — the M's equivalent station is Lex/63 (`B08`), one block north. `OfficeModeView` queries both `F11S` and `B08S` and merges the results with the station name shown per row. If MTA routes M back through the 53rd St tunnel (this has flipped with Queens Blvd construction over the years), change `MTAStops.lexAv63Downtown` to `"F11S"` and the merge collapses correctly. The grep-the-feed path to verify: download `gtfs-bdfm`, list unique `stop_id`s under `route_id = "M"`, see whether `F11*` or `B08*` appears.
+- **Static stops.txt is authoritative for stop_id → station name.** Use `http://web.mta.info/developers/data/nyct/subway/google_transit.zip` for one-off lookups. Don't try to infer names from stop IDs.
 
 ## Origin in mode views is `Anchors.home` / `Anchors.office`, not GPS
 
