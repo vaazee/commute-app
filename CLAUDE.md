@@ -4,7 +4,7 @@ Operational notes for Claude Code sessions on this repo. For product/design deta
 
 ## Project identity
 
-- **Single-user iOS app.** Owner: Vasanth. Two modes, two hardcoded anchors: `Anchors.home` (610 Clinton St, Hoboken) and `Anchors.office` (919 3rd Ave, NYC). Don't add a settings UI or generalize to other users.
+- **Single-user iOS app.** Owner: Vasanth. Two modes, three hardcoded anchors: `Anchors.home` (610 Clinton St, Hoboken), `Anchors.office` (919 3rd Ave, NYC), and `Anchors.portAuthority` (625 8th Ave, NYC — used for Citi Bike dock lookup near PABT). Don't add a settings UI or generalize to other users.
 - **Bundle ID:** `com.vaazee.CommuteApp` (may be renamed for free-account device signing; check `project.pbxproj` before assuming).
 - **Target device:** iPhone 17 Pro Max. All simulator testing uses that destination.
 
@@ -61,6 +61,10 @@ If you add a new file that does SQLite text binding, either use this or re-decla
 - Headsigns have a `-Exact Fare` suffix in mixed case. Strip with `options: .caseInsensitive`.
 - Service activation **must** use `America/New_York` timezone for both the `yyyyMMdd` lookup and the weekday computation. Don't use the device's locale.
 
+## Home mode's bus section queries two stops
+
+The bus section in `HomeModeView` always queries both the nearest NYC-bound 126 stop (usually Clinton/7th) *and* Clinton St at 5th St (`NJTransitStops.clintonAt5th = "43944"`), deduplicating if they're the same. Departures from both stops are merged and sorted by time, with the stop name shown as secondary text. Don't remove the Clinton/5th fallback — it's there so the user always sees that stop even if `nearestStops` picks a different one.
+
 ## Home mode's bus filter is load-bearing
 
 ```swift
@@ -85,6 +89,14 @@ The protobuf feed at `path.transitdata.nyc` only emits a single `stop_time_updat
   - Current constants (`MTAStops` in `SubwayTrain.swift`): `A27N` = 42 St-Port Authority uptown (E→Jamaica), `F11S` = Lex/53 downtown (E→WTC), `B08S` = Lex/63 downtown (M→Essex/Middle Village).
 - **The M train uses the 63rd St tunnel, not 53rd.** This is the thing that will bite you. At Lex/53 (`F11`) only the **E** stops — the M's equivalent station is Lex/63 (`B08`), one block north. `OfficeModeView` queries both `F11S` and `B08S` and merges the results with the station name shown per row. If MTA routes M back through the 53rd St tunnel (this has flipped with Queens Blvd construction over the years), change `MTAStops.lexAv63Downtown` to `"F11S"` and the merge collapses correctly. The grep-the-feed path to verify: download `gtfs-bdfm`, list unique `stop_id`s under `route_id = "M"`, see whether `F11*` or `B08*` appears.
 - **Static stops.txt is authoritative for stop_id → station name.** Use `http://web.mta.info/developers/data/nyct/subway/google_transit.zip` for one-off lookups. Don't try to infer names from stop IDs.
+
+## Swipe gesture for mode switching
+
+`ContentView` has a `.simultaneousGesture(DragGesture)` on the `ScrollView` that toggles modes: swipe left → Office, swipe right → Home. It uses `.simultaneousGesture` (not `.gesture`) so it doesn't block the ScrollView's vertical scroll. Thresholds: `abs(h) > 80` and `abs(h) > abs(v) * 2`. The `setMode` helper clears the override when target matches detected mode (matching the picker's behavior), and fires a light haptic via `UIImpactFeedbackGenerator`.
+
+## Office mode's bus section includes Citi Bike docks near PABT
+
+The bus section in `OfficeModeView` shows Citi Bike dock availability at the nearest station to `Anchors.portAuthority` at the top, before the bus departures. This mirrors home mode's PATH section which shows "Citi Bike docks at terminal". The station name is shown as caption text below the dock count.
 
 ## Origin in mode views is `Anchors.home` / `Anchors.office`, not GPS
 

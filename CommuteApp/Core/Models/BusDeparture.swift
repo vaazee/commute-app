@@ -15,4 +15,5 @@ struct BusDeparture: Identifiable, Hashable {
 
 enum NJTransitStops {
     static let portAuthorityDeparture = "3511"
+    static let clintonAt5th = "43944"
 }

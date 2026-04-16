@@ -65,6 +65,20 @@ struct OfficeModeView: View {
 
     private var busSection: some View {
         SectionCard(title: "126 Bus from Port Authority", systemImage: "bus.fill") {
+            if let dock = bikes.nearestStations(to: Anchors.portAuthority, count: 1).first {
+                HStack {
+                    Text("Citi Bike docks near PABT")
+                        .font(.subheadline)
+                    Spacer()
+                    Text("\(dock.docksAvailable) open")
+                        .font(.subheadline.bold())
+                        .foregroundStyle(dock.docksAvailable > 0 ? .green : .red)
+                }
+                Text(dock.name)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Divider()
+            }
             let deps = bus.nextDepartures(
                 stopId: NJTransitStops.portAuthorityDeparture,
                 stopName: "Port Authority Bus Terminal",

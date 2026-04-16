@@ -23,13 +23,13 @@ A personal iOS app that makes the daily commute legible at a glance. Two anchore
 
 ## What the app shows
 
-The app opens to whichever mode GPS suggests. The top bar shows the current mode and a segmented control that can override the auto-detected mode (the override sticks until cleared).
+The app opens to whichever mode GPS suggests. The top bar shows the current mode and a segmented control that can override the auto-detected mode (the override sticks until cleared). You can also **swipe left** to switch to Office mode or **swipe right** to switch to Home mode, with haptic feedback.
 
 ### Home mode
 
 Ordered top to bottom — the first section is what you'd check first when leaving the house.
 
-1. **126 Bus → NYC.** Nearest 126 bus stop to 610 Clinton St that is served by the **Willow Ave or Clinton St NYC-bound variants** (the Washington St variant is excluded by the headsign filter). Lists the next ~5 scheduled departures within 20 minutes with minutes-away and absolute departure time.
+1. **126 Bus → NYC.** Departures from the nearest 126 bus stop to 610 Clinton St *and* the Clinton St at 5th St stop (always included), filtered to the **Willow Ave or Clinton St NYC-bound variants** (the Washington St variant is excluded by the headsign filter). Lists the next ~6 scheduled departures within 20 minutes, merged from both stops and sorted by time, with the stop name shown per row.
 2. **E uptown @ Port Auth.** Next real-time **E train** arrivals at 42 St-Port Authority (stop `A27N`) within 30 minutes, from the MTA GTFS-realtime ACE feed. Covers the "got off the 126 at Port Authority, catch the E uptown to the office" leg.
 3. **Citi Bike near home.** Three nearest rentable stations to 610 Clinton St, with name, walking distance, bikes available (including e-bikes), and docks available.
 4. **Hoboken PATH.** Open Citi Bike docks at the station *named* "Hoboken Terminal" (so you can confirm there's room to drop the bike before boarding), followed by the next PATH trains from Hoboken → 33rd St within 30 minutes.
@@ -39,7 +39,7 @@ Ordered top to bottom — the first section is what you'd check first when leavi
 
 1. **E / M downtown.** Merged real-time list of **E trains** at Lexington Av/53 St (stop `F11S`) and **M trains** at Lexington Av/63 St (stop `B08S`), each within 30 minutes, sorted by arrival. The M currently runs via the 63rd St tunnel rather than the 53rd, so it doesn't stop at Lex/53 — the two rows show the station name for disambiguation. Data from MTA GTFS-realtime ACE + BDFM feeds.
 2. **Citi Bike near office.** Three nearest rentable stations to 919 3rd Ave.
-3. **126 Bus from Port Authority.** Next ~6 scheduled departures from the Port Authority Bus Terminal departure stop (stop_id `3511`) within 30 minutes, filtered to headsigns containing `WILLOW` or `CLINTON`.
+3. **126 Bus from Port Authority.** Citi Bike dock availability at the nearest station to Port Authority Bus Terminal (so you can confirm there's room to dock before heading into the terminal), followed by the next ~6 scheduled departures from the PABT departure stop (stop_id `3511`) within 30 minutes, filtered to headsigns containing `WILLOW` or `CLINTON`.
 4. **PATH 23rd St → Hoboken.** Next trains from 23rd St → Hoboken within 30 minutes.
 5. **References.**
 
@@ -57,7 +57,7 @@ All locked in early and unchanged since:
 - **No backend.** Every data source is hit directly from the device. The app has no server, no account, no analytics.
 - **Bundled static GTFS, not realtime, for NJ Transit.** Real-time bus tracking (NJ Transit's `mybusnow` endpoint) is skipped. Bundling the schedule as a slim SQLite keeps everything offline-capable for bus data and removes a whole class of auth/rate-limit concerns. The UI labels bus times as "Scheduled — does not reflect live delays."
 - **Two fixed geographic anchors.** The app is built for one user with one home and one office. `Anchors.home` and `Anchors.office` are hardcoded constants. No user settings UI, no address picker.
-- **Mode detected via nearest-anchor haversine.** The `ModeManager` compares current location to both anchors and picks whichever is closer. Manual override via segmented picker when GPS is denied or the user wants to preview the other mode.
+- **Mode detected via nearest-anchor haversine.** The `ModeManager` compares current location to both anchors and picks whichever is closer. Manual override via segmented picker or horizontal swipe (left → Office, right → Home) when GPS is denied or the user wants to preview the other mode.
 - **PATH via RidePATH JSON, not GTFS-RT.** Initially built against the GTFS-realtime protobuf feed at `path.transitdata.nyc`, but that feed only emits a single `stop_time_update` per trip (the next stop), not full trip predictions — so it couldn't answer "when will the next train leaving Hoboken reach 33rd St?". RidePATH (`panynj.gov/bin/portauthority/ridepath.json`) gives full next-train predictions per station and destination. SwiftProtobuf was added then removed.
 - **Headsign filtering at query time, not preprocess time.** The GTFS preprocessor keeps *all* route 126 variants in the bundled DB. The two views apply `headsignContains` / `headsignExcludes` filters at query time. This keeps one preprocessor for multiple UI use cases (NYC-bound from home vs. Hoboken-bound from Port Authority).
 - **Origin uses anchors, not GPS.** `HomeModeView` and `OfficeModeView` compute distances relative to `Anchors.home` / `Anchors.office`, not the current GPS coordinate. This keeps the displayed data stable even as you walk around, and guarantees the "nearest stop to home" is actually nearest to home.
@@ -119,16 +119,16 @@ All feeds are public and require no API key. Citi Bike's GBFS has included Hobok
 
 ### `CommuteApp/App/`
 - `CommuteApp.swift` — `@main` struct, single scene, no state.
-- `ContentView.swift` — top-level view. Holds the refresh `Timer`, fires `LocationService.start()` in `.task`, and binds the mode picker to `ModeManager`.
+- `ContentView.swift` — top-level view. Holds the refresh `Timer`, fires `LocationService.start()` in `.task`, binds the mode picker to `ModeManager`, and handles horizontal swipe gestures for mode switching.
 
 ### `CommuteApp/Core/Location/`
-- `Anchors.swift` — the two `CLLocationCoordinate2D` constants and the `CommuteMode` enum (`.home` / `.office`).
+- `Anchors.swift` — the three `CLLocationCoordinate2D` constants (`home`, `office`, `portAuthority`) and the `CommuteMode` enum (`.home` / `.office`).
 - `LocationService.swift` — `CLLocationManager` wrapper, `kCLLocationAccuracyHundredMeters`, `distanceFilter = 100`. Handles the `notDetermined → authorizedWhenInUse` flow. Silent on error; the UI falls back to manual mode toggle when permission is denied.
 - `ModeManager.swift` — publishes `.detected` from haversine comparison, and `.override` settable from the picker. `current` returns `override ?? detected`.
 
 ### `CommuteApp/Core/Models/`
 - `BikeStation.swift` — value type with a `distance(from:)` helper using `CLLocation.distance(from:)`.
-- `BusDeparture.swift` — bus departure struct plus `NJTransitStops.portAuthorityDeparture = "3511"`.
+- `BusDeparture.swift` — bus departure struct plus `NJTransitStops` constants (`portAuthorityDeparture = "3511"`, `clintonAt5th = "43944"`).
 - `PathTrain.swift` — PATH train struct plus station-ID constants (`HOB`, `23S`, `33S`).
 - `SubwayTrain.swift` — MTA subway train struct plus the `MTAStops` enum of stop IDs we care about (`A27N` = Port Auth uptown, `F11S` = Lex/53 downtown, `B08S` = Lex/63 downtown) and a `stationName` lookup table for display.
 
@@ -164,12 +164,12 @@ All feeds are public and require no API key. Citi Bike's GBFS has included Hobok
 
 ### `CommuteApp/Features/HomeMode/HomeModeView.swift`
 - `origin = Anchors.home`
-- Bus filter: `["NEW YORK VIA CLINTON", "NEW YORK VIA WILLOW"]`. This both picks the nearest stop *served by* those variants and filters departures at that stop to those variants.
+- Bus section always queries both the nearest NYC-bound stop and Clinton St at 5th St (`NJTransitStops.clintonAt5th`), deduplicating if they're the same. Departures are merged and sorted by time with stop name as secondary text. Filter: `["NEW YORK VIA CLINTON", "NEW YORK VIA WILLOW"]`.
 - Subway section queries `MTAStops.portAuthorityACEUptown` (`A27N`) for E trains uptown from Port Authority.
 
 ### `CommuteApp/Features/OfficeMode/OfficeModeView.swift`
 - `origin = Anchors.office`
-- Bus stop is hardcoded to `NJTransitStops.portAuthorityDeparture` (`3511`). Filter is `["WILLOW", "CLINTON"]` (broader — any Willow or Clinton variant, inbound or outbound relative to NYC).
+- Bus section shows Citi Bike dock availability at the nearest station to `Anchors.portAuthority` at the top, followed by departures from `NJTransitStops.portAuthorityDeparture` (`3511`). Filter is `["WILLOW", "CLINTON"]` (broader — any Willow or Clinton variant, inbound or outbound relative to NYC).
 - Subway section queries two stops separately: `F11S` (Lex/53) filtered to `E` and `B08S` (Lex/63) filtered to `M`, then merges and sorts by arrival. If MTA ever restores the M to the 53rd St tunnel, collapse this by pointing `MTAStops.lexAv63Downtown` back to `"F11S"`.
 
 ---

@@ -22,39 +22,46 @@ struct HomeModeView: View {
         Anchors.home
     }
 
+    private var busStops: [(id: String, name: String)] {
+        let nycViaWillowOrClinton = ["NEW YORK VIA CLINTON", "NEW YORK VIA WILLOW"]
+        let nearest = bus.nearestStops(
+            to: origin,
+            limit: 1,
+            headsignContains: nycViaWillowOrClinton,
+            headsignExcludes: []
+        ).first
+        var stops: [(id: String, name: String)] = []
+        if let s = nearest {
+            stops.append((s.stopId, s.name))
+        }
+        if !stops.contains(where: { $0.id == NJTransitStops.clintonAt5th }) {
+            stops.append((NJTransitStops.clintonAt5th, "CLINTON ST AT 5TH ST"))
+        }
+        return stops
+    }
+
     private var busSection: some View {
         SectionCard(title: "126 Bus → NYC", systemImage: "bus.fill") {
             let nycViaWillowOrClinton = ["NEW YORK VIA CLINTON", "NEW YORK VIA WILLOW"]
-            let nearestStop = bus.nearestStops(
-                to: origin,
-                limit: 1,
-                headsignContains: nycViaWillowOrClinton,
-                headsignExcludes: []
-            ).first
-            if let stop = nearestStop {
-                let deps = bus.nextDepartures(
-                    stopId: stop.stopId,
+            let deps = busStops.flatMap { stop in
+                bus.nextDepartures(
+                    stopId: stop.id,
                     stopName: stop.name,
                     withinMinutes: 20,
                     headsignContains: nycViaWillowOrClinton,
                     headsignExcludes: []
                 )
-                Text(stop.name)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                if deps.isEmpty {
-                    EmptyRow(text: "No scheduled departures in next 20 min")
-                } else {
-                    ForEach(deps.prefix(5)) { d in
-                        DepartureRow(primary: d.headsign, secondary: nil, minutes: d.minutesAway, date: d.departure)
-                    }
-                }
-                Text("Scheduled — does not reflect live delays")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+            }.sorted { $0.departure < $1.departure }
+            if deps.isEmpty {
+                EmptyRow(text: "No scheduled departures in next 20 min")
             } else {
-                EmptyRow(text: "No nearby 126 stop")
+                ForEach(deps.prefix(6)) { d in
+                    DepartureRow(primary: d.headsign, secondary: d.stopName, minutes: d.minutesAway, date: d.departure)
+                }
             }
+            Text("Scheduled — does not reflect live delays")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
         }
     }
 
