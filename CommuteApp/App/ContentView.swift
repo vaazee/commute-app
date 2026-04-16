@@ -1,5 +1,6 @@
 import SwiftUI
 import CoreLocation
+import UIKit
 
 struct ContentView: View {
     @State private var location = LocationService.shared
@@ -26,6 +27,15 @@ struct ContentView: View {
                     .padding()
                 }
                 .refreshable { await refreshAll() }
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 30)
+                        .onEnded { value in
+                            let h = value.translation.width
+                            let v = value.translation.height
+                            guard abs(h) > 80, abs(h) > abs(v) * 2 else { return }
+                            setMode(h < 0 ? .office : .home)
+                        }
+                )
             }
             .navigationTitle("Commute")
             .navigationBarTitleDisplayMode(.inline)
@@ -59,6 +69,12 @@ struct ContentView: View {
         .padding(.horizontal)
         .padding(.vertical, 8)
         .background(.thinMaterial)
+    }
+
+    private func setMode(_ target: CommuteMode) {
+        guard mode.current != target else { return }
+        mode.setOverride(target == mode.detected ? nil : target)
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
     private func refreshAll() async {
