@@ -24,9 +24,9 @@ struct OfficeModeView: View {
 
     private var subwaySection: some View {
         SectionCard(title: "E / M / F downtown", systemImage: "tram.tunnel.fill") {
-            let eTrains = subway.upcoming(
+            let efTrains = subway.upcoming(
                 stopId: MTAStops.lexAv53Downtown,
-                routes: ["E"],
+                routes: ["E", "F"],
                 within: 30
             )
             let mfTrains = subway.upcoming(
@@ -34,7 +34,7 @@ struct OfficeModeView: View {
                 routes: ["M", "F"],
                 within: 30
             )
-            let merged = (eTrains + mfTrains).sorted { $0.arrival < $1.arrival }
+            let merged = (efTrains + mfTrains).sorted { $0.arrival < $1.arrival }
             if merged.isEmpty {
                 EmptyRow(text: "No trains in next 30 min")
             } else {

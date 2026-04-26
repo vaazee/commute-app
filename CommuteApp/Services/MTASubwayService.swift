@@ -18,7 +18,7 @@ final class MTASubwayService {
             let (ace, bdfm) = try await (aceResp, bdfmResp)
 
             var all = GTFSRealtimeParser.parse(ace.0, keepRoutes: ["E"])
-            all.append(contentsOf: GTFSRealtimeParser.parse(bdfm.0, keepRoutes: ["M"]))
+            all.append(contentsOf: GTFSRealtimeParser.parse(bdfm.0, keepRoutes: ["M", "F"]))
 
             self.trains = all.sorted { $0.arrival < $1.arrival }
             self.lastUpdated = Date()
